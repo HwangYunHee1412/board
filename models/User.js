@@ -1,4 +1,5 @@
 var mongoose = require("mongoose");
+var bcrypt = require("bcrypt-nodejs"); //
 
 // schema // 1
 var userSchema = mongoose.Schema({
@@ -31,7 +32,7 @@ userSchema.virtual("newPassword")
 // password validation
 // virtual들은 직접 validation이 안되기 때문에(DB에 값을 저장하지 않으니까 어찌보면 당연합니다) password에서 값을 확인
 userSchema.path("password").validate(function(v) {
- var user = this; //this는 user model
+  var user = this; //this는 user model
 
  // create user
  if(user.isNew){ // DB에 한번도 기록되지 않았던 model
@@ -48,7 +49,7 @@ userSchema.path("password").validate(function(v) {
   if(!user.currentPassword){
    user.invalidate("currentPassword", "Current Password is required!");
   }
-  if(user.currentPassword && user.currentPassword != user.originalPassword){
+  if(user.currentPassword && !bcrypt.compareSync(user.currentPassword, user.originalPassword)){ // 2
    user.invalidate("currentPassword", "Current Password is invalid!");
   }
   if(user.newPassword !== user.passwordConfirmation) {
@@ -56,7 +57,22 @@ userSchema.path("password").validate(function(v) {
   }
  }
 });
+// hash password // 3
+userSchema.pre("save", function (next){
+ var user = this;
+ if(!user.isModified("password")){ // 3-1
+  return next();
+ } else {
+  user.password = bcrypt.hashSync(user.password); // 3-2
+  return next();
+ }
+});
 
+// model methods // 4
+userSchema.methods.authenticate = function (password) {
+ var user = this;
+ return bcrypt.compareSync(password,user.password);
+};
 // model & export
 var User = mongoose.model("user",userSchema);
 module.exports = User;
